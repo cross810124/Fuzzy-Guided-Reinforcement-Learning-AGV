@@ -1,0 +1,162 @@
+<!--
+  AMMR Simplified Model - Differential Drive AGV
+  ================================================
+  Fuzzy-Guided Reinforcement Learning Project
+  aiRobots Laboratory, NCKU
+
+  模型規格（預設值，待替換為實際 AMMR 尺寸）：
+  - 底盤: 0.40m x 0.30m x 0.10m (長 x 寬 x 高)
+  - 輪距 (track width): 0.32m
+  - 輪徑: 0.08m (半徑 0.04m)
+  - 輪寬: 0.02m
+  - 被動輪 (caster): 前後各一，半徑 0.02m
+  - 總重量: ~5 kg（小台 AGV）
+  - 控制: left_wheel_vel, right_wheel_vel
+  - 感測: 1-ray LiDAR (front-facing rangefinder)
+-->
+<mujoco model="ammr_simple">
+  <compiler angle="radian" coordinate="local"/>
+
+  <option timestep="0.01" gravity="0 0 -9.81" integrator="implicit">
+    <flag warmstart="enable"/>
+  </option>
+
+  <default>
+    <joint armature="0.01" damping="0.1"/>
+    <geom friction="1.0 0.005 0.0001" condim="3" conaffinity="1" contype="1"/>
+    <motor ctrllimited="true" ctrlrange="-10 10"/>
+  </default>
+
+  <asset>
+    <!-- Ground texture -->
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.9 0.9 0.9" rgb2="0.7 0.7 0.7"
+             width="512" height="512"/>
+    <material name="grid_mat" texture="grid" texrepeat="8 8" texuniform="true"/>
+
+    <!-- Robot body material -->
+    <material name="chassis_mat" rgba="0.2 0.3 0.8 1.0"/>
+    <material name="wheel_mat" rgba="0.1 0.1 0.1 1.0"/>
+    <material name="caster_mat" rgba="0.5 0.5 0.5 1.0"/>
+  </asset>
+
+  <worldbody>
+    <!-- ============================================ -->
+    <!-- Ground Plane (10m x 10m arena)               -->
+    <!-- ============================================ -->
+    <geom name="floor" type="plane" size="5 5 0.01" material="grid_mat"
+          conaffinity="1" contype="1"/>
+
+    <!-- Arena Walls (10m x 10m, height 0.5m, thickness 0.05m) -->
+    <geom name="wall_north" type="box" pos="0 5.025 0.25" size="5.05 0.025 0.25"
+          rgba="0.4 0.4 0.4 1" conaffinity="1" contype="1"/>
+    <geom name="wall_south" type="box" pos="0 -5.025 0.25" size="5.05 0.025 0.25"
+          rgba="0.4 0.4 0.4 1" conaffinity="1" contype="1"/>
+    <geom name="wall_east" type="box" pos="5.025 0 0.25" size="0.025 5.0 0.25"
+          rgba="0.4 0.4 0.4 1" conaffinity="1" contype="1"/>
+    <geom name="wall_west" type="box" pos="-5.025 0 0.25" size="0.025 5.0 0.25"
+          rgba="0.4 0.4 0.4 1" conaffinity="1" contype="1"/>
+
+    <!-- Goal marker (visual only, will be repositioned by env) -->
+    <geom name="goal_marker" type="cylinder" pos="3 3 0.005" size="0.15 0.005"
+          rgba="0.0 1.0 0.0 0.5" contype="0" conaffinity="0"/>
+
+    <!-- ============================================ -->
+    <!-- AMMR Robot Body                              -->
+    <!-- ============================================ -->
+    <body name="chassis" pos="0 0 0.06">
+      <freejoint name="root"/>
+
+      <!-- Chassis -->
+      <geom name="chassis_geom" type="box" size="0.20 0.15 0.05"
+            mass="4.0" material="chassis_mat"/>
+
+      <!-- IMU sensor site (at center of chassis) -->
+      <site name="imu_site" pos="0 0 0" size="0.01"/>
+
+      <!-- ========================================== -->
+      <!-- Left Wheel                                 -->
+      <!-- ========================================== -->
+      <body name="left_wheel" pos="0 0.16 -0.02">
+        <joint name="left_wheel_joint" type="hinge" axis="0 1 0"
+               damping="0.05" armature="0.005"/>
+        <geom name="left_wheel_geom" type="cylinder" size="0.04 0.01"
+              mass="0.2" material="wheel_mat"
+              euler="1.5708 0 0"
+              friction="1.5 0.005 0.0001"/>
+      </body>
+
+      <!-- ========================================== -->
+      <!-- Right Wheel                                -->
+      <!-- ========================================== -->
+      <body name="right_wheel" pos="0 -0.16 -0.02">
+        <joint name="right_wheel_joint" type="hinge" axis="0 1 0"
+               damping="0.05" armature="0.005"/>
+        <geom name="right_wheel_geom" type="cylinder" size="0.04 0.01"
+              mass="0.2" material="wheel_mat"
+              euler="1.5708 0 0"
+              friction="1.5 0.005 0.0001"/>
+      </body>
+
+      <!-- ========================================== -->
+      <!-- Front Caster Wheel                         -->
+      <!-- ========================================== -->
+      <body name="front_caster" pos="0.15 0 -0.04">
+        <joint name="front_caster_yaw" type="hinge" axis="0 0 1"
+               damping="0.01" armature="0.001"/>
+        <geom name="front_caster_geom" type="sphere" size="0.02"
+              mass="0.05" material="caster_mat"
+              friction="0.5 0.005 0.0001"/>
+      </body>
+
+      <!-- ========================================== -->
+      <!-- Rear Caster Wheel                          -->
+      <!-- ========================================== -->
+      <body name="rear_caster" pos="-0.15 0 -0.04">
+        <joint name="rear_caster_yaw" type="hinge" axis="0 0 1"
+               damping="0.01" armature="0.001"/>
+        <geom name="rear_caster_geom" type="sphere" size="0.02"
+              mass="0.05" material="caster_mat"
+              friction="0.5 0.005 0.0001"/>
+      </body>
+
+      <!-- ========================================== -->
+      <!-- 1-Ray LiDAR (Front-facing Rangefinder)     -->
+      <!-- ========================================== -->
+      <site name="lidar_site" pos="0.20 0 0.05" euler="0 1.5708 0"
+            size="0.015" rgba="1 0 0 0.5"/>
+
+    </body>
+  </worldbody>
+
+  <!-- ============================================ -->
+  <!-- Actuators: Velocity control on each wheel    -->
+  <!-- ============================================ -->
+  <actuator>
+    <velocity name="left_wheel_motor" joint="left_wheel_joint"
+              kv="5.0" ctrlrange="-10 10"/>
+    <velocity name="right_wheel_motor" joint="right_wheel_joint"
+              kv="5.0" ctrlrange="-10 10"/>
+  </actuator>
+
+  <!-- ============================================ -->
+  <!-- Sensors                                      -->
+  <!-- ============================================ -->
+  <sensor>
+    <!-- Rangefinder: 1-ray LiDAR, max range 10m -->
+    <rangefinder name="lidar_front" site="lidar_site" cutoff="10.0"/>
+
+    <!-- IMU sensors -->
+    <accelerometer name="imu_accel" site="imu_site"/>
+    <gyro name="imu_gyro" site="imu_site"/>
+
+    <!-- Wheel velocities (for odometry) -->
+    <jointvel name="left_wheel_vel" joint="left_wheel_joint"/>
+    <jointvel name="right_wheel_vel" joint="right_wheel_joint"/>
+
+    <!-- Chassis state -->
+    <framepos name="chassis_pos" objtype="site" objname="imu_site"/>
+    <framequat name="chassis_quat" objtype="site" objname="imu_site"/>
+    <framelinvel name="chassis_linvel" objtype="site" objname="imu_site"/>
+    <frameangvel name="chassis_angvel" objtype="site" objname="imu_site"/>
+  </sensor>
+</mujoco>

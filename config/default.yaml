@@ -1,0 +1,62 @@
+# ============================================================
+# Fuzzy-Guided RL AGV — Default Training Config
+# ============================================================
+# Usage:
+#   python scripts/train.py                          # 使用此預設
+#   python scripts/train.py --config config/fast.yaml # 自訂 config
+#   python scripts/train.py --total_timesteps 500000  # CLI 覆蓋
+
+# ---- Training ----
+total_timesteps: 500000    # 總訓練步數（Phase 1 MVP）
+eval_interval: 10          # 每 N 次 update 做一次 evaluation
+eval_episodes: 10          # 每次 eval 跑幾個 episode
+save_interval: 50          # 每 N 次 update 存 checkpoint
+log_interval: 1            # 每 N 次 update 印 log
+seed: 42
+
+# ---- PPO ----
+ppo:
+  lr: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_eps: 0.2
+  max_grad_norm: 0.5
+  entropy_coef: 0.005       # 降低，避免 std 爆炸
+  value_coef: 0.5
+  n_steps: 2048            # rollout 步數 per update
+  n_epochs: 10             # PPO epoch 數
+  batch_size: 64
+
+# ---- Network ----
+network:
+  state_hidden: 64
+  fuzzy_hidden: 32
+  fused_dim: 64
+
+# ---- Fuzzy Reward Shaping ----
+fuzzy_reward:
+  lambda_safety: 0.05
+  lambda_exploration: 0.02
+  lambda_confidence: 0.03
+  near_obstacle_threshold: 2.0
+  novelty_grid_size: 0.5
+  enable_adaptive: false    # Phase 2 啟用
+
+# ---- Safety ----
+safety:
+  safety_threshold: 0.2     # Phase 1 放鬆（只在極危險時觸發）
+  speed_limit_factor: 0.7   # 危險時只輕微限制（Phase 2 再收緊到 0.5）
+
+# ---- Environment ----
+env:
+  max_steps: 1000
+  arena_size: 2.0
+  goal_threshold: 0.3
+  max_wheel_speed: 10.0
+
+# ---- Output ----
+output:
+  log_dir: "data/logs"
+  checkpoint_dir: "data/checkpoints"
+  results_dir: "data/results"
+  experiment_name: "fuzzy_rl_mvp"
